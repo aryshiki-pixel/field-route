@@ -1,88 +1,129 @@
-import matplotlib.pyplot as plt
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Field Route Generator (Headland Last)</title>
+<style>
+body { font-family: sans-serif; }
+canvas {
+  border: 1px solid #333;
+  margin-top: 10px;
+}
+</style>
+</head>
+<body>
 
-# ===== 圃場設定 =====
-FIELD_WIDTH = 100    # 横幅（m）
-FIELD_HEIGHT = 60    # 縦幅（m）
-WORK_WIDTH = 5       # トラクター作業幅（m）
-HEADLAND_WIDTH = 8   # 枕地幅（m）
+<h3>圃場耕運ルート生成（枕地3行後回し）</h3>
 
-# ===== 経路格納 =====
-path_x = []
-path_y = []
+<input type="file" id="imgInput"><br><br>
 
-def add_point(x, y):
-    path_x.append(x)
-    path_y.append(y)
+作業幅（m相当）:
+<input type="number" id="width" value="20"><br><br>
 
-# ===== 1. 内側耕起エリア設定（枕地を除外） =====
-inner_x_min = HEADLAND_WIDTH
-inner_x_max = FIELD_WIDTH - HEADLAND_WIDTH
-inner_y_min = HEADLAND_WIDTH
-inner_y_max = FIELD_HEIGHT - HEADLAND_WIDTH
+<button id="closeBtn">圃場を閉じる</button>
+<button id="genBtn">ルート生成</button>
 
-# ===== 2. 内側往復耕起（平行ライン） =====
-y = inner_y_min
-direction = 1  # 1: → , -1: ←
+<canvas id="cv"></canvas>
 
-while y <= inner_y_max:
-    if direction == 1:
-        # 左 → 右
-        add_point(inner_x_min, y)
-        add_point(inner_x_max, y)
-    else:
-        # 右 → 左
-        add_point(inner_x_max, y)
-        add_point(inner_x_min, y)
+<script>
+const canvas = document.getElementById("cv");
+const ctx = canvas.getContext("2d");
 
-    y += WORK_WIDTH
-    direction *= -1
+let img = null;
+let poly = [];
 
-# ===== 3. 枕地（3分耕起）最後に周回 =====
-# 下辺 → 右辺 → 上辺（左辺は出入口想定で除外）
+document.getElementById("imgInput").onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  poly = [];
 
-# 下辺
-add_point(HEADLAND_WIDTH, HEADLAND_WIDTH)
-add_point(FIELD_WIDTH - HEADLAND_WIDTH, HEADLAND_WIDTH)
+  img = new Image();
+  img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img,0,0);
+  };
+  img.src = URL.createObjectURL(file);
+};
 
-# 右辺
-add_point(FIELD_WIDTH - HEADLAND_WIDTH, HEADLAND_WIDTH)
-add_point(FIELD_WIDTH - HEADLAND_WIDTH, FIELD_HEIGHT - HEADLAND_WIDTH)
+canvas.onclick = e => {
+  if (!img) return;
+  const r = canvas.getBoundingClientRect();
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
+  poly.push({x,y});
 
-# 上辺
-add_point(FIELD_WIDTH - HEADLAND_WIDTH, FIELD_HEIGHT - HEADLAND_WIDTH)
-add_point(HEADLAND_WIDTH, FIELD_HEIGHT - HEADLAND_WIDTH)
+  ctx.fillStyle = "red";
+  ctx.beginPath();
+  ctx.arc(x,y,4,0,Math.PI*2);
+  ctx.fill();
+};
 
-# ===== 描画 =====
-plt.figure(figsize=(12, 7))
+document.getElementById("closeBtn").onclick = () => {
+  if (poly.length < 3) return;
+  ctx.strokeStyle = "white";
+  ctx.beginPath();
+  poly.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+  ctx.closePath();
+  ctx.stroke();
+};
 
-# 圃場外枠
-plt.plot(
-    [0, FIELD_WIDTH, FIELD_WIDTH, 0, 0],
-    [0, 0, FIELD_HEIGHT, FIELD_HEIGHT, 0],
-    'k-', linewidth=2, label="圃場外枠"
-)
+document.getElementById("genBtn").onclick = () => {
+  if (poly.length < 3) return;
 
-# 枕地エリア枠
-plt.plot(
-    [HEADLAND_WIDTH, FIELD_WIDTH-HEADLAND_WIDTH, FIELD_WIDTH-HEADLAND_WIDTH, HEADLAND_WIDTH, HEADLAND_WIDTH],
-    [HEADLAND_WIDTH, HEADLAND_WIDTH, FIELD_HEIGHT-HEADLAND_WIDTH, FIELD_HEIGHT-HEADLAND_WIDTH, HEADLAND_WIDTH],
-    'r--', linewidth=1.5, label="内側耕起エリア"
-)
+  const step = Number(document.getElementById("width").value);
+  const headland = step * 3;
 
-# 走行経路
-plt.plot(path_x, path_y, 'b-', linewidth=2, label="トラクター走行ライン")
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(img,0,0);
 
-# 開始点
-plt.plot(path_x[0], path_y[0], 'go', markersize=8, label="開始点")
+  // 圃場描画
+  ctx.strokeStyle = "white";
+  ctx.beginPath();
+  poly.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+  ctx.closePath();
+  ctx.stroke();
 
-# 終了点
-plt.plot(path_x[-1], path_y[-1], 'ro', markersize=8, label="終了点")
+  // bbox
+  const xs = poly.map(p=>p.x);
+  const ys = poly.map(p=>p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
 
-# 表示設定
-plt.title("枕地3分後回し方式 トラクター耕起経路図")
-plt.xlabel("X座標 (m)")
-plt.ylabel("Y座標 (m)")
-plt.axis("equal")
-plt.grid(True)
-plt.legend()
-plt.show()
+  // --- 内側耕起（非接続） ---
+  ctx.strokeStyle = "lime";
+  ctx.lineWidth = 2;
+  let dir = 1;
+
+  for (let y = minY + headland; y <= maxY - headland; y += step) {
+    ctx.beginPath();
+    if (dir === 1) {
+      ctx.moveTo(minX + headland, y);
+      ctx.lineTo(maxX - headland, y);
+    } else {
+      ctx.moveTo(maxX - headland, y);
+      ctx.lineTo(minX + headland, y);
+    }
+    ctx.stroke();
+    dir *= -1;
+  }
+
+  // --- 枕地（最後に3周） ---
+  ctx.strokeStyle = "orange";
+  for (let i=0;i<3;i++) {
+    const o = i * step;
+    ctx.beginPath();
+    ctx.moveTo(minX+o, minY+o);
+    ctx.lineTo(maxX-o, minY+o);
+    ctx.lineTo(maxX-o, maxY-o);
+    ctx.lineTo(minX+o, maxY-o);
+    ctx.closePath();
+    ctx.stroke();
+  }
+};
+</script>
+
+</body>
+</html>
