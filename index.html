@@ -2,8 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>圃場耕運ルート生成</title>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+<title>圃場耕運ルート生成（安定版）</title>
 <style>
 body { font-family: sans-serif; }
 canvas { border:1px solid #333; margin-top:10px; }
@@ -20,8 +19,8 @@ button { margin-right:5px; }
 <input type="number" id="width" value="20"><br><br>
 
 <button id="modeField">圃場指定</button>
-<button id="modeIn">入口指定</button>
-<button id="modeOut">出口指定</button>
+<button id="modeIn">入口</button>
+<button id="modeOut">出口</button>
 <button id="closeField">圃場を閉じる</button>
 <button id="gen">ルート生成</button>
 
@@ -46,10 +45,35 @@ document.getElementById("imgInput").onchange = e => {
   img.onload = () => {
     canvas.width = img.width;
     canvas.height = img.height;
-    ctx.drawImage(img,0,0);
+    redraw();
   };
   img.src = URL.createObjectURL(e.target.files[0]);
 };
+
+function redraw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if (img) ctx.drawImage(img,0,0);
+
+  // 圃場
+  if (field.length > 0) {
+    ctx.strokeStyle="white";
+    ctx.beginPath();
+    field.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
+    if (field.length > 2) ctx.closePath();
+    ctx.stroke();
+  }
+
+  // 入口出口
+  if (entry) drawPoint(entry,"blue");
+  if (exit) drawPoint(exit,"purple");
+}
+
+function drawPoint(p,color){
+  ctx.fillStyle=color;
+  ctx.beginPath();
+  ctx.arc(p[0],p[1],6,0,Math.PI*2);
+  ctx.fill();
+}
 
 canvas.onclick = e => {
   if (!img) return;
@@ -57,70 +81,60 @@ canvas.onclick = e => {
   const x = e.clientX - r.left;
   const y = e.clientY - r.top;
 
-  if (mode==="field") {
-    field.push([x,y]);
-    ctx.fillStyle="red";
-    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
-  }
-  if (mode==="in") {
-    entry=[x,y];
-    ctx.fillStyle="blue";
-    ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill();
-  }
-  if (mode==="out") {
-    exit=[x,y];
-    ctx.fillStyle="purple";
-    ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill();
-  }
+  if (mode==="field") field.push([x,y]);
+  if (mode==="in") entry=[x,y];
+  if (mode==="out") exit=[x,y];
+  redraw();
 };
 
-document.getElementById("closeField").onclick = () => {
-  if (field.length<3) return;
-  ctx.strokeStyle="white";
-  ctx.beginPath();
-  field.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
-  ctx.closePath(); ctx.stroke();
-};
+document.getElementById("closeField").onclick = redraw;
+
+function pointInPoly(x,y,poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i][0], yi=poly[i][1];
+    const xj=poly[j][0], yj=poly[j][1];
+    const intersect=((yi>y)!==(yj>y)) &&
+      (x<(xj-xi)*(y-yi)/(yj-yi)+xi);
+    if(intersect) inside=!inside;
+  }
+  return inside;
+}
 
 document.getElementById("gen").onclick = () => {
-  if (field.length<3 || !entry || !exit) {
-    alert("圃場・入口・出口をすべて指定してください");
+  if (field.length<3) {
+    alert("圃場を指定してください");
     return;
   }
 
+  redraw();
+
   const step = Number(document.getElementById("width").value);
-  const headland = step*3;
+  const headland = step * 3;
 
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(img,0,0);
+  const ys = field.map(p=>p[1]);
+  const minY = Math.min(...ys) + headland;
+  const maxY = Math.max(...ys) - headland;
 
-  const poly = turf.polygon([[...field, field[0]]]);
-
-  // --- 内側ポリゴン ---
-  let inner = turf.buffer(poly, -headland, {units:"pixels"});
-  if (!inner) return;
-
-  // --- 内側耕起 ---
-  const bbox = turf.bbox(inner);
-  let flip=false;
   ctx.strokeStyle="lime";
   ctx.lineWidth=2;
+  let flip=false;
 
-  for (let y=bbox[1]; y<=bbox[3]; y+=step) {
-    const scan = turf.lineString([[bbox[0]-10,y],[bbox[2]+10,y]]);
-    const hits = turf.lineIntersect(scan, inner);
-    if (hits.features.length<2) continue;
-
-    const pts = hits.features.map(f=>f.geometry.coordinates)
-      .sort((a,b)=>a[0]-b[0]);
+  // --- 内側耕起 ---
+  for(let y=minY;y<=maxY;y+=step){
+    let xs=[];
+    for(let x=0;x<=canvas.width;x+=5){
+      if(pointInPoly(x,y,field)) xs.push(x);
+    }
+    if(xs.length<2) continue;
 
     ctx.beginPath();
-    if (!flip) {
-      ctx.moveTo(pts[0][0],pts[0][1]);
-      ctx.lineTo(pts[pts.length-1][0],pts[pts.length-1][1]);
-    } else {
-      ctx.moveTo(pts[pts.length-1][0],pts[pts.length-1][1]);
-      ctx.lineTo(pts[0][0],pts[0][1]);
+    if(!flip){
+      ctx.moveTo(xs[0],y);
+      ctx.lineTo(xs[xs.length-1],y);
+    }else{
+      ctx.moveTo(xs[xs.length-1],y);
+      ctx.lineTo(xs[0],y);
     }
     ctx.stroke();
     flip=!flip;
@@ -128,23 +142,18 @@ document.getElementById("gen").onclick = () => {
 
   // --- 枕地（最後に3周） ---
   ctx.strokeStyle="orange";
-  let cur = poly;
-  for (let i=0;i<3;i++) {
-    const ring = turf.polygonToLine(cur);
+  for(let i=0;i<3;i++){
+    const o=i*step;
     ctx.beginPath();
-    ring.geometry.coordinates[0].forEach((p,i)=>{
-      if(i===0) ctx.moveTo(p[0],p[1]);
-      else ctx.lineTo(p[0],p[1]);
+    field.forEach((p,j)=>{
+      const px=p[0]+Math.sign(p[0]-canvas.width/2)*o;
+      const py=p[1]+Math.sign(p[1]-canvas.height/2)*o;
+      if(j===0) ctx.moveTo(px,py);
+      else ctx.lineTo(px,py);
     });
-    ctx.closePath(); ctx.stroke();
-    cur = turf.buffer(cur, -step, {units:"pixels"});
+    ctx.closePath();
+    ctx.stroke();
   }
-
-  // 出入口再描画
-  ctx.fillStyle="blue";
-  ctx.beginPath(); ctx.arc(entry[0],entry[1],6,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle="purple";
-  ctx.beginPath(); ctx.arc(exit[0],exit[1],6,0,Math.PI*2); ctx.fill();
 };
 </script>
 
