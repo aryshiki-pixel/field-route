@@ -1,11 +1,75 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>TEST</title>
-</head>
-<body>
-<h1>It works</h1>
-<p>If you see this, GitHub Pages is OK.</p>
-</body>
-</html>
+document.getElementById("genBtn").onclick = () => {
+  if (points.length < 3 || !img) return;
+
+  const workW = Number(document.getElementById("width").value);
+  const poly = turf.polygon([[...points, points[0]]]);
+  const bbox = turf.bbox(poly);
+
+  let scanY = bbox[1];
+  let lines = [];
+
+  // --- 作業ライン抽出 ---
+  while (scanY <= bbox[3]) {
+    const scanLine = turf.lineString([
+      [bbox[0] - 10, scanY],
+      [bbox[2] + 10, scanY]
+    ]);
+
+    const hits = turf.lineIntersect(scanLine, poly);
+
+    if (hits.features.length >= 2) {
+      const pts = hits.features
+        .map(f => f.geometry.coordinates)
+        .sort((a, b) => a[0] - b[0]);
+
+      lines.push({
+        left: pts[0],
+        right: pts[pts.length - 1]
+      });
+    }
+    scanY += workW * 20;
+  }
+
+  // --- 一筆書きパス構築 ---
+  let path = [];
+
+  lines.forEach((ln, i) => {
+    if (i === 0) {
+      // 最初のライン
+      path.push(ln.left, ln.right);
+    } else {
+      const prev = path[path.length - 1];
+      const nextStart = (i % 2 === 0) ? ln.left : ln.right;
+      const nextEnd   = (i % 2 === 0) ? ln.right : ln.left;
+
+      // 旋回用の接続線（短い縦移動）
+      path.push(
+        [prev[0], nextStart[1]],
+        nextStart,
+        nextEnd
+      );
+    }
+  });
+
+  // --- 再描画 ---
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+
+  // ポリゴン
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  points.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+  ctx.closePath();
+  ctx.stroke();
+
+  // 一筆書きルート
+  ctx.strokeStyle = "lime";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  path.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(p[0], p[1]);
+    else ctx.lineTo(p[0], p[1]);
+  });
+  ctx.stroke();
+};
