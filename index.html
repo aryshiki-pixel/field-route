@@ -1,29 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Field Route Generator</title>
+<title>Field Route Planner (Practical)</title>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 <style>
-body { font-family: Arial, sans-serif; }
+body { font-family: sans-serif; }
 canvas {
   border: 1px solid #333;
   margin-top: 10px;
   touch-action: none;
 }
+button { margin-right: 6px; }
 </style>
 </head>
 <body>
 
-<h2>Field Route Generator (Headland Last)</h2>
+<h2>圃場耕運ルート生成（実作業仕様）</h2>
 
 <input type="file" id="imgInput"><br><br>
 
-Work width (m):
-<input type="number" id="width" value="1.65" step="0.01"><br><br>
+作業幅 (m):
+<input type="number" id="width" value="1.65" step="0.01">
+旋回半径 (m):
+<input type="number" id="turn" value="2.2" step="0.1"><br><br>
 
-<button id="closeBtn">Close polygon</button>
-<button id="genBtn">Generate route</button>
+<button id="setIn">入口指定</button>
+<button id="setOut">出口指定</button>
+<button id="closeBtn">圃場確定</button>
+<button id="genBtn">ルート生成</button>
 
 <canvas id="cv"></canvas>
 
@@ -33,12 +38,20 @@ const ctx = canvas.getContext("2d");
 
 let img = null;
 let points = [];
+let entrance = null;
+let exit = null;
+let mode = "polygon";
 
-document.getElementById("imgInput").onchange = e => {
+const PX_PER_M = 20;      // 仮スケール（後で自動化可能）
+const HEADLAND_ROWS = 3; // 枕地3周
+
+// ---------- 画像読み込み ----------
+imgInput.onchange = e => {
   const file = e.target.files[0];
   if (!file) return;
-
   points = [];
+  entrance = exit = null;
+
   img = new Image();
   img.onload = () => {
     canvas.width = img.width;
@@ -48,52 +61,75 @@ document.getElementById("imgInput").onchange = e => {
   img.src = URL.createObjectURL(file);
 };
 
+// ---------- モード切替 ----------
+setIn.onclick = () => mode = "in";
+setOut.onclick = () => mode = "out";
+
+// ---------- クリック ----------
 canvas.onclick = e => {
   if (!img) return;
   const r = canvas.getBoundingClientRect();
   const x = e.clientX - r.left;
   const y = e.clientY - r.top;
-  points.push([x, y]);
 
-  ctx.fillStyle = "red";
-  ctx.beginPath();
-  ctx.arc(x, y, 4, 0, Math.PI * 2);
-  ctx.fill();
+  if (mode === "polygon") {
+    points.push([x, y]);
+    drawPoint(x, y, "red");
+  } else if (mode === "in") {
+    entrance = [x, y];
+    drawPoint(x, y, "blue");
+  } else if (mode === "out") {
+    exit = [x, y];
+    drawPoint(x, y, "orange");
+  }
 };
 
-document.getElementById("closeBtn").onclick = () => {
+function drawPoint(x, y, c) {
+  ctx.fillStyle = c;
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ---------- 圃場確定 ----------
+closeBtn.onclick = () => {
   if (points.length < 3) return;
   ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
   ctx.beginPath();
   points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
   ctx.closePath();
   ctx.stroke();
 };
 
-document.getElementById("genBtn").onclick = () => {
-  if (points.length < 3) return;
+// ---------- ルート生成 ----------
+genBtn.onclick = () => {
+  if (points.length < 3 || !entrance || !exit) {
+    alert("入口・出口・圃場をすべて指定してください");
+    return;
+  }
 
-  const workW = Number(document.getElementById("width").value);
-  const headlandRows = 3;
+  const workW = Number(width.value) * PX_PER_M;
+  const turnR = Number(turn.value) * PX_PER_M;
 
-  const poly = turf.polygon([[...points, points[0]]]);
-
-  // --- inner polygon (exclude headland) ---
-  const shrink = workW * 20 * headlandRows;
-  const inner = turf.buffer(poly, -shrink, { units: "degrees" });
-  if (!inner) return;
+  const field = turf.polygon([[...points, points[0]]]);
 
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(img,0,0);
 
-  // draw original polygon
+  // 圃場描画
   ctx.strokeStyle = "white";
   ctx.beginPath();
   points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
   ctx.closePath();
   ctx.stroke();
 
-  // --- Phase 1: inner working lines ---
+  // ---------- 内側圃場 ----------
+  const innerOffset = workW * HEADLAND_ROWS;
+  const inner = turf.buffer(field, -innerOffset, {units:"degrees"});
+  if (!inner) return;
+
+  // ---------- 内側作業（牛耕式） ----------
   const bbox = turf.bbox(inner);
   let y = bbox[1];
   let flip = false;
@@ -104,12 +140,9 @@ document.getElementById("genBtn").onclick = () => {
   while (y < bbox[3]) {
     const scan = turf.lineString([[bbox[0]-10,y],[bbox[2]+10,y]]);
     const hits = turf.lineIntersect(scan, inner);
-
     if (hits.features.length >= 2) {
-      const pts = hits.features
-        .map(f=>f.geometry.coordinates)
-        .sort((a,b)=>a[0]-b[0]);
-
+      const pts = hits.features.map(f=>f.geometry.coordinates)
+                               .sort((a,b)=>a[0]-b[0]);
       ctx.beginPath();
       if (!flip) {
         ctx.moveTo(pts[0][0],pts[0][1]);
@@ -121,14 +154,14 @@ document.getElementById("genBtn").onclick = () => {
       ctx.stroke();
       flip = !flip;
     }
-    y += workW * 20;
+    y += workW;
   }
 
-  // --- Phase 2: headland (outer 3 rounds) ---
+  // ---------- 枕地（最後に3周） ----------
   ctx.strokeStyle = "orange";
+  let current = field;
 
-  let current = poly;
-  for (let i=0;i<headlandRows;i++) {
+  for (let i=0;i<HEADLAND_ROWS;i++) {
     const ring = turf.polygonToLine(current);
     ctx.beginPath();
     ring.geometry.coordinates[0].forEach((p,j)=>{
@@ -138,8 +171,12 @@ document.getElementById("genBtn").onclick = () => {
     ctx.closePath();
     ctx.stroke();
 
-    current = turf.buffer(current, -workW*20, { units:"degrees" });
+    current = turf.buffer(current, -workW, {units:"degrees"});
   }
+
+  // ---------- 入口・出口 ----------
+  drawPoint(entrance[0],entrance[1],"blue");
+  drawPoint(exit[0],exit[1],"orange");
 };
 </script>
 
