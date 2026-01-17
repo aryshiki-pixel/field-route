@@ -1,21 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Field Route Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+<style>
+body {
+  font-family: Arial, sans-serif;
+}
+canvas {
+  border: 1px solid #333;
+  display: block;
+  margin-top: 10px;
+  touch-action: none;
+}
+button {
+  margin-right: 5px;
+}
+</style>
+</head>
+<body>
+
+<h2>Field Route Generator</h2>
+
+<input type="file" id="imgInput"><br><br>
+
+Work width (m):
+<input type="number" id="width" value="1.65" step="0.01"><br><br>
+
+<button id="closeBtn">Close polygon</button>
+<button id="genBtn">Generate route</button>
+
+<canvas id="cv"></canvas>
+
 <script>
-function generate() {
+const canvas = document.getElementById("cv");
+const ctx = canvas.getContext("2d");
+
+let img = null;
+let points = [];
+
+// ---- image load ----
+document.getElementById("imgInput").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  points = [];
+
+  img = new Image();
+  img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+// ---- click to define polygon ----
+canvas.addEventListener("click", e => {
+  if (!img) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  points.push([x, y]);
+
+  ctx.fillStyle = "red";
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.fill();
+});
+
+// ---- close polygon ----
+document.getElementById("closeBtn").onclick = () => {
+  if (points.length < 3) return;
+
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(p[0], p[1]);
+    else ctx.lineTo(p[0], p[1]);
+  });
+  ctx.closePath();
+  ctx.stroke();
+};
+
+// ---- generate single continuous route ----
+document.getElementById("genBtn").onclick = () => {
   if (points.length < 3) return;
 
   const workW = Number(document.getElementById("width").value);
+
   const poly = turf.polygon([[...points, points[0]]]);
   const bbox = turf.bbox(poly);
 
-  let y = bbox[1];
+  let scanY = bbox[1];
   let lines = [];
 
-  // --- collect each working line ---
-  while (y <= bbox[3]) {
-    const scan = turf.lineString([[bbox[0] - 10, y], [bbox[2] + 10, y]]);
-    const hits = turf.lineIntersect(scan, poly);
+  // collect each working line
+  while (scanY <= bbox[3]) {
+    const scanLine = turf.lineString([
+      [bbox[0] - 10, scanY],
+      [bbox[2] + 10, scanY]
+    ]);
+
+    const hits = turf.lineIntersect(scanLine, poly);
 
     if (hits.features.length >= 2) {
-      // sort intersections by X (left -> right)
       const pts = hits.features
         .map(f => f.geometry.coordinates)
         .sort((a, b) => a[0] - b[0]);
@@ -25,10 +119,11 @@ function generate() {
         right: pts[pts.length - 1]
       });
     }
-    y += workW * 20;
+
+    scanY += workW * 20; // pixel step (later replace by scale)
   }
 
-  // --- build single continuous path (zig-zag) ---
+  // build zig-zag single path
   let path = [];
   lines.forEach((ln, i) => {
     if (i % 2 === 0) {
@@ -38,28 +133,22 @@ function generate() {
     }
   });
 
-  // --- redraw ---
+  // redraw base image
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (img.complete) {
-    const scale = Math.min(
-      canvas.width / img.width,
-      canvas.height / img.height
-    );
-    const w = img.width * scale;
-    const h = img.height * scale;
-    const x = (canvas.width - w) / 2;
-    const y0 = (canvas.height - h) / 2;
-    ctx.drawImage(img, x, y0, w, h);
-  }
+  ctx.drawImage(img, 0, 0);
 
-  // draw polygon
+  // redraw polygon
   ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  points.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+  points.forEach((p, i) => {
+    if (i === 0) ctx.moveTo(p[0], p[1]);
+    else ctx.lineTo(p[0], p[1]);
+  });
   ctx.closePath();
   ctx.stroke();
 
-  // draw single path
+  // draw single continuous route
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -68,5 +157,8 @@ function generate() {
     else ctx.lineTo(p[0], p[1]);
   });
   ctx.stroke();
-}
+};
 </script>
+
+</body>
+</html>
