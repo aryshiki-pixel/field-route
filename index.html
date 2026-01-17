@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Field Route Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+<style>
+body { font-family: Arial, sans-serif; }
+canvas { border: 1px solid #333; touch-action: none; }
+</style>
+</head>
+<body>
+
+<h2>Field Route Generator</h2>
+
+<input type="file" id="imgInput"><br><br>
+Work width (m):
+<input type="number" id="width" value="1.65" step="0.01"><br><br>
+
+<button onclick="closePolygon()">Close polygon</button>
+<button onclick="generate()">Generate route</button>
+<br><br>
+
+<canvas id="cv" width="800" height="800"></canvas>
+
+<script>
+const canvas = document.getElementById("cv");
+const ctx = canvas.getContext("2d");
+let img = new Image();
+let points = [];
+
+document.getElementById("imgInput").onchange = e => {
+  img.src = URL.createObjectURL(e.target.files[0]);
+  img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+};
+
+canvas.addEventListener("click", e => {
+  const r = canvas.getBoundingClientRect();
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
+  points.push([x, y]);
+  ctx.fillStyle = "red";
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.fill();
+});
+
+function closePolygon() {
+  ctx.strokeStyle = "white";
+  ctx.beginPath();
+  points.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function generate() {
+  const w = Number(document.getElementById("width").value);
+  const poly = turf.polygon([[...points, points[0]]]);
+  const bbox = turf.bbox(poly);
+
+  let y = bbox[1];
+  let flip = false;
+
+  ctx.strokeStyle = "lime";
+  ctx.lineWidth = 2;
+
+  while (y < bbox[3])
