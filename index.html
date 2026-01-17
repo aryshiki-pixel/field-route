@@ -2,76 +2,23 @@
 function generate() {
   if (points.length < 3) return;
 
-  const w = Number(document.getElementById("width").value);
+  const workW = Number(document.getElementById("width").value);
   const poly = turf.polygon([[...points, points[0]]]);
   const bbox = turf.bbox(poly);
 
   let y = bbox[1];
-  let flip = false;
-  let path = [];
+  let lines = [];
 
-  while (y < bbox[3]) {
-    const line = turf.lineString([[bbox[0], y], [bbox[2], y]]);
-    const cut = turf.lineIntersect(line, poly);
+  // --- collect each working line ---
+  while (y <= bbox[3]) {
+    const scan = turf.lineString([[bbox[0] - 10, y], [bbox[2] + 10, y]]);
+    const hits = turf.lineIntersect(scan, poly);
 
-    if (cut.features.length >= 2) {
-      let a = cut.features[0].geometry.coordinates;
-      let b = cut.features[1].geometry.coordinates;
+    if (hits.features.length >= 2) {
+      // sort intersections by X (left -> right)
+      const pts = hits.features
+        .map(f => f.geometry.coordinates)
+        .sort((a, b) => a[0] - b[0]);
 
-      if (flip) {
-        path.push(b, a);
-      } else {
-        path.push(a, b);
-      }
-      flip = !flip;
-    }
-    y += w * 20;
-  }
-
-  // draw single continuous path
-  ctx.strokeStyle = "lime";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  path.forEach((p, i) => {
-    if (i === 0) ctx.moveTo(p[0], p[1]);
-    else ctx.lineTo(p[0], p[1]);
-  });
-  ctx.stroke();
-}
-</script>
-  const w = Number(document.getElementById("width").value);
-  const poly = turf.polygon([[...points, points[0]]]);
-  const bbox = turf.bbox(poly);
-
-  let y = bbox[1];
-  let flip = false;
-
-  ctx.strokeStyle = "lime";
-  ctx.lineWidth = 2;
-
-  while (y < bbox[3]) {
-    const line = turf.lineString([[bbox[0], y], [bbox[2], y]]);
-    const cut = turf.lineIntersect(line, poly);
-
-    if (cut.features.length >= 2) {
-      const a = cut.features[0].geometry.coordinates;
-      const b = cut.features[1].geometry.coordinates;
-
-      ctx.beginPath();
-      if (flip) {
-        ctx.moveTo(b[0], b[1]);
-        ctx.lineTo(a[0], a[1]);
-      } else {
-        ctx.moveTo(a[0], a[1]);
-        ctx.lineTo(b[0], b[1]);
-      }
-      ctx.stroke();
-      flip = !flip;
-    }
-    y += w * 20;
-  }
-}
-</script>
-
-</body>
-</html>
+      lines.push({
+        left: pts</html>
