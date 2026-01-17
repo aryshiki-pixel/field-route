@@ -1,184 +1,88 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<title>Field Route Planner (Practical)</title>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-<style>
-body { font-family: sans-serif; }
-canvas {
-  border: 1px solid #333;
-  margin-top: 10px;
-  touch-action: none;
-}
-button { margin-right: 6px; }
-</style>
-</head>
-<body>
+import matplotlib.pyplot as plt
 
-<h2>圃場耕運ルート生成（実作業仕様）</h2>
+# ===== 圃場設定 =====
+FIELD_WIDTH = 100    # 横幅（m）
+FIELD_HEIGHT = 60    # 縦幅（m）
+WORK_WIDTH = 5       # トラクター作業幅（m）
+HEADLAND_WIDTH = 8   # 枕地幅（m）
 
-<input type="file" id="imgInput"><br><br>
+# ===== 経路格納 =====
+path_x = []
+path_y = []
 
-作業幅 (m):
-<input type="number" id="width" value="1.65" step="0.01">
-旋回半径 (m):
-<input type="number" id="turn" value="2.2" step="0.1"><br><br>
+def add_point(x, y):
+    path_x.append(x)
+    path_y.append(y)
 
-<button id="setIn">入口指定</button>
-<button id="setOut">出口指定</button>
-<button id="closeBtn">圃場確定</button>
-<button id="genBtn">ルート生成</button>
+# ===== 1. 内側耕起エリア設定（枕地を除外） =====
+inner_x_min = HEADLAND_WIDTH
+inner_x_max = FIELD_WIDTH - HEADLAND_WIDTH
+inner_y_min = HEADLAND_WIDTH
+inner_y_max = FIELD_HEIGHT - HEADLAND_WIDTH
 
-<canvas id="cv"></canvas>
+# ===== 2. 内側往復耕起（平行ライン） =====
+y = inner_y_min
+direction = 1  # 1: → , -1: ←
 
-<script>
-const canvas = document.getElementById("cv");
-const ctx = canvas.getContext("2d");
+while y <= inner_y_max:
+    if direction == 1:
+        # 左 → 右
+        add_point(inner_x_min, y)
+        add_point(inner_x_max, y)
+    else:
+        # 右 → 左
+        add_point(inner_x_max, y)
+        add_point(inner_x_min, y)
 
-let img = null;
-let points = [];
-let entrance = null;
-let exit = null;
-let mode = "polygon";
+    y += WORK_WIDTH
+    direction *= -1
 
-const PX_PER_M = 20;      // 仮スケール（後で自動化可能）
-const HEADLAND_ROWS = 3; // 枕地3周
+# ===== 3. 枕地（3分耕起）最後に周回 =====
+# 下辺 → 右辺 → 上辺（左辺は出入口想定で除外）
 
-// ---------- 画像読み込み ----------
-imgInput.onchange = e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  points = [];
-  entrance = exit = null;
+# 下辺
+add_point(HEADLAND_WIDTH, HEADLAND_WIDTH)
+add_point(FIELD_WIDTH - HEADLAND_WIDTH, HEADLAND_WIDTH)
 
-  img = new Image();
-  img.onload = () => {
-    canvas.width = img.width;
-    canvas.height = img.height;
-    ctx.drawImage(img, 0, 0);
-  };
-  img.src = URL.createObjectURL(file);
-};
+# 右辺
+add_point(FIELD_WIDTH - HEADLAND_WIDTH, HEADLAND_WIDTH)
+add_point(FIELD_WIDTH - HEADLAND_WIDTH, FIELD_HEIGHT - HEADLAND_WIDTH)
 
-// ---------- モード切替 ----------
-setIn.onclick = () => mode = "in";
-setOut.onclick = () => mode = "out";
+# 上辺
+add_point(FIELD_WIDTH - HEADLAND_WIDTH, FIELD_HEIGHT - HEADLAND_WIDTH)
+add_point(HEADLAND_WIDTH, FIELD_HEIGHT - HEADLAND_WIDTH)
 
-// ---------- クリック ----------
-canvas.onclick = e => {
-  if (!img) return;
-  const r = canvas.getBoundingClientRect();
-  const x = e.clientX - r.left;
-  const y = e.clientY - r.top;
+# ===== 描画 =====
+plt.figure(figsize=(12, 7))
 
-  if (mode === "polygon") {
-    points.push([x, y]);
-    drawPoint(x, y, "red");
-  } else if (mode === "in") {
-    entrance = [x, y];
-    drawPoint(x, y, "blue");
-  } else if (mode === "out") {
-    exit = [x, y];
-    drawPoint(x, y, "orange");
-  }
-};
+# 圃場外枠
+plt.plot(
+    [0, FIELD_WIDTH, FIELD_WIDTH, 0, 0],
+    [0, 0, FIELD_HEIGHT, FIELD_HEIGHT, 0],
+    'k-', linewidth=2, label="圃場外枠"
+)
 
-function drawPoint(x, y, c) {
-  ctx.fillStyle = c;
-  ctx.beginPath();
-  ctx.arc(x, y, 5, 0, Math.PI * 2);
-  ctx.fill();
-}
+# 枕地エリア枠
+plt.plot(
+    [HEADLAND_WIDTH, FIELD_WIDTH-HEADLAND_WIDTH, FIELD_WIDTH-HEADLAND_WIDTH, HEADLAND_WIDTH, HEADLAND_WIDTH],
+    [HEADLAND_WIDTH, HEADLAND_WIDTH, FIELD_HEIGHT-HEADLAND_WIDTH, FIELD_HEIGHT-HEADLAND_WIDTH, HEADLAND_WIDTH],
+    'r--', linewidth=1.5, label="内側耕起エリア"
+)
 
-// ---------- 圃場確定 ----------
-closeBtn.onclick = () => {
-  if (points.length < 3) return;
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
-  ctx.closePath();
-  ctx.stroke();
-};
+# 走行経路
+plt.plot(path_x, path_y, 'b-', linewidth=2, label="トラクター走行ライン")
 
-// ---------- ルート生成 ----------
-genBtn.onclick = () => {
-  if (points.length < 3 || !entrance || !exit) {
-    alert("入口・出口・圃場をすべて指定してください");
-    return;
-  }
+# 開始点
+plt.plot(path_x[0], path_y[0], 'go', markersize=8, label="開始点")
 
-  const workW = Number(width.value) * PX_PER_M;
-  const turnR = Number(turn.value) * PX_PER_M;
+# 終了点
+plt.plot(path_x[-1], path_y[-1], 'ro', markersize=8, label="終了点")
 
-  const field = turf.polygon([[...points, points[0]]]);
-
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(img,0,0);
-
-  // 圃場描画
-  ctx.strokeStyle = "white";
-  ctx.beginPath();
-  points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
-  ctx.closePath();
-  ctx.stroke();
-
-  // ---------- 内側圃場 ----------
-  const innerOffset = workW * HEADLAND_ROWS;
-  const inner = turf.buffer(field, -innerOffset, {units:"degrees"});
-  if (!inner) return;
-
-  // ---------- 内側作業（牛耕式） ----------
-  const bbox = turf.bbox(inner);
-  let y = bbox[1];
-  let flip = false;
-
-  ctx.strokeStyle = "lime";
-  ctx.lineWidth = 2;
-
-  while (y < bbox[3]) {
-    const scan = turf.lineString([[bbox[0]-10,y],[bbox[2]+10,y]]);
-    const hits = turf.lineIntersect(scan, inner);
-    if (hits.features.length >= 2) {
-      const pts = hits.features.map(f=>f.geometry.coordinates)
-                               .sort((a,b)=>a[0]-b[0]);
-      ctx.beginPath();
-      if (!flip) {
-        ctx.moveTo(pts[0][0],pts[0][1]);
-        ctx.lineTo(pts[pts.length-1][0],pts[pts.length-1][1]);
-      } else {
-        ctx.moveTo(pts[pts.length-1][0],pts[pts.length-1][1]);
-        ctx.lineTo(pts[0][0],pts[0][1]);
-      }
-      ctx.stroke();
-      flip = !flip;
-    }
-    y += workW;
-  }
-
-  // ---------- 枕地（最後に3周） ----------
-  ctx.strokeStyle = "orange";
-  let current = field;
-
-  for (let i=0;i<HEADLAND_ROWS;i++) {
-    const ring = turf.polygonToLine(current);
-    ctx.beginPath();
-    ring.geometry.coordinates[0].forEach((p,j)=>{
-      if(j===0) ctx.moveTo(p[0],p[1]);
-      else ctx.lineTo(p[0],p[1]);
-    });
-    ctx.closePath();
-    ctx.stroke();
-
-    current = turf.buffer(current, -workW, {units:"degrees"});
-  }
-
-  // ---------- 入口・出口 ----------
-  drawPoint(entrance[0],entrance[1],"blue");
-  drawPoint(exit[0],exit[1],"orange");
-};
-</script>
-
-</body>
-</html>
+# 表示設定
+plt.title("枕地3分後回し方式 トラクター耕起経路図")
+plt.xlabel("X座標 (m)")
+plt.ylabel("Y座標 (m)")
+plt.axis("equal")
+plt.grid(True)
+plt.legend()
+plt.show()
