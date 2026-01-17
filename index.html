@@ -5,23 +5,17 @@
 <title>Field Route Generator</title>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 <style>
-body {
-  font-family: Arial, sans-serif;
-}
+body { font-family: Arial, sans-serif; }
 canvas {
   border: 1px solid #333;
-  display: block;
   margin-top: 10px;
   touch-action: none;
-}
-button {
-  margin-right: 5px;
 }
 </style>
 </head>
 <body>
 
-<h2>Field Route Generator</h2>
+<h2>Field Route Generator (Headland Last)</h2>
 
 <input type="file" id="imgInput"><br><br>
 
@@ -40,128 +34,112 @@ const ctx = canvas.getContext("2d");
 let img = null;
 let points = [];
 
-// ---- image load ----
-document.getElementById("imgInput").addEventListener("change", e => {
+document.getElementById("imgInput").onchange = e => {
   const file = e.target.files[0];
   if (!file) return;
 
   points = [];
-
   img = new Image();
   img.onload = () => {
     canvas.width = img.width;
     canvas.height = img.height;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0);
   };
   img.src = URL.createObjectURL(file);
-});
+};
 
-// ---- click to define polygon ----
-canvas.addEventListener("click", e => {
+canvas.onclick = e => {
   if (!img) return;
-
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-
+  const r = canvas.getBoundingClientRect();
+  const x = e.clientX - r.left;
+  const y = e.clientY - r.top;
   points.push([x, y]);
 
   ctx.fillStyle = "red";
   ctx.beginPath();
   ctx.arc(x, y, 4, 0, Math.PI * 2);
   ctx.fill();
-});
+};
 
-// ---- close polygon ----
 document.getElementById("closeBtn").onclick = () => {
   if (points.length < 3) return;
-
   ctx.strokeStyle = "white";
-  ctx.lineWidth = 2;
   ctx.beginPath();
-  points.forEach((p, i) => {
-    if (i === 0) ctx.moveTo(p[0], p[1]);
-    else ctx.lineTo(p[0], p[1]);
-  });
+  points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
   ctx.closePath();
   ctx.stroke();
 };
 
-// ---- generate single continuous route ----
 document.getElementById("genBtn").onclick = () => {
-  if (points.length < 3 || !img) return;
+  if (points.length < 3) return;
 
   const workW = Number(document.getElementById("width").value);
+  const headlandRows = 3;
+
   const poly = turf.polygon([[...points, points[0]]]);
-  const bbox = turf.bbox(poly);
 
-  let scanY = bbox[1];
-  let lines = [];
+  // --- inner polygon (exclude headland) ---
+  const shrink = workW * 20 * headlandRows;
+  const inner = turf.buffer(poly, -shrink, { units: "degrees" });
+  if (!inner) return;
 
-  // collect each working line
-  while (scanY <= bbox[3]) {
-    const scanLine = turf.lineString([
-      [bbox[0] - 10, scanY],
-      [bbox[2] + 10, scanY]
-    ]);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(img,0,0);
 
-    const hits = turf.lineIntersect(scanLine, poly);
-
-    if (hits.features.length >= 2) {
-      const pts = hits.features
-        .map(f => f.geometry.coordinates)
-        .sort((a, b) => a[0] - b[0]);
-
-      lines.push({
-        left: pts[0],
-        right: pts[pts.length - 1]
-      });
-    }
-    scanY += workW * 20; // pixel step (temporary)
-  }
-
-  // ---- build ONE continuous path with connections ----
-  let path = [];
-
-  lines.forEach((ln, i) => {
-    if (i === 0) {
-      path.push(ln.left, ln.right);
-    } else {
-      const prev = path[path.length - 1];
-      const start = (i % 2 === 0) ? ln.left : ln.right;
-      const end   = (i % 2 === 0) ? ln.right : ln.left;
-
-      // connect previous line to next line (turn)
-      path.push(
-        [prev[0], start[1]],
-        start,
-        end
-      );
-    }
-  });
-
-  // ---- redraw ----
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0);
-
-  // polygon
+  // draw original polygon
   ctx.strokeStyle = "white";
-  ctx.lineWidth = 2;
   ctx.beginPath();
-  points.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+  points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
   ctx.closePath();
   ctx.stroke();
 
-  // single continuous route
+  // --- Phase 1: inner working lines ---
+  const bbox = turf.bbox(inner);
+  let y = bbox[1];
+  let flip = false;
+
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 2;
-  ctx.beginPath();
-  path.forEach((p, i) => {
-    if (i === 0) ctx.moveTo(p[0], p[1]);
-    else ctx.lineTo(p[0], p[1]);
-  });
-  ctx.stroke();
+
+  while (y < bbox[3]) {
+    const scan = turf.lineString([[bbox[0]-10,y],[bbox[2]+10,y]]);
+    const hits = turf.lineIntersect(scan, inner);
+
+    if (hits.features.length >= 2) {
+      const pts = hits.features
+        .map(f=>f.geometry.coordinates)
+        .sort((a,b)=>a[0]-b[0]);
+
+      ctx.beginPath();
+      if (!flip) {
+        ctx.moveTo(pts[0][0],pts[0][1]);
+        ctx.lineTo(pts[pts.length-1][0],pts[pts.length-1][1]);
+      } else {
+        ctx.moveTo(pts[pts.length-1][0],pts[pts.length-1][1]);
+        ctx.lineTo(pts[0][0],pts[0][1]);
+      }
+      ctx.stroke();
+      flip = !flip;
+    }
+    y += workW * 20;
+  }
+
+  // --- Phase 2: headland (outer 3 rounds) ---
+  ctx.strokeStyle = "orange";
+
+  let current = poly;
+  for (let i=0;i<headlandRows;i++) {
+    const ring = turf.polygonToLine(current);
+    ctx.beginPath();
+    ring.geometry.coordinates[0].forEach((p,j)=>{
+      if(j===0) ctx.moveTo(p[0],p[1]);
+      else ctx.lineTo(p[0],p[1]);
+    });
+    ctx.closePath();
+    ctx.stroke();
+
+    current = turf.buffer(current, -workW*20, { units:"degrees" });
+  }
 };
 </script>
 
