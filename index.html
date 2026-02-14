@@ -3,105 +3,373 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>田んぼ耕運ルートプランナー</title>
-    <link rel="stylesheet" href="style.css">
+    <title>田んぼ耕運ルート図</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .info {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .legend-color {
+            width: 40px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        .steps {
+            background: #fff8e1;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .steps h3 {
+            color: #f39c12;
+            margin-bottom: 15px;
+        }
+        .step {
+            margin-bottom: 12px;
+            padding-left: 25px;
+            position: relative;
+        }
+        .step::before {
+            content: '▶';
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+        }
+    </style>
 </head>
 <body>
-    <button class="menu-toggle" id="menuToggle">
-        <span></span>
-        <span></span>
-        <span></span>
-    </button>
-
-    <div class="sidebar" id="sidebar">
-        <h1>🚜 田んぼ耕運ルートプランナー</h1>
+    <div class="container">
+        <h1>🚜 田んぼ耕運ルート図</h1>
         
-        <div class="section">
-            <div class="section-title">0. 航空写真をアップロード</div>
-            <input type="file" id="imageUpload" accept="image/*">
-            <label for="imageUpload" class="file-upload-label">
-                📷 写真を選択
-            </label>
-            <div id="imagePreview" class="image-preview" style="display: none;">
-                <img id="previewImg" src="" alt="プレビュー">
-            </div>
-            <div class="image-controls" id="imageControls" style="display: none;">
-                <button id="fitImageBtn" class="btn-secondary">画像を合わせる</button>
-                <button id="removeImageBtn" class="btn-danger">削除</button>
-            </div>
-            <div class="help-text">
-                Google MapやドローンなどでキャプチャしたJPG/PNG画像
-            </div>
+        <div class="info">
+            <strong>田んぼ情報:</strong> 面積 999.53 m² (約302坪) / 外周 128.08 m<br>
+            <strong>トラクター:</strong> ヤンマー AF222 (作業幅110cm、重複10cm)
         </div>
-        
-        <div class="section">
-            <div class="section-title">1. 田んぼの範囲設定</div>
-            <div class="button-group">
-                <button id="drawBtn" class="btn-primary">範囲を描画</button>
-                <button id="editBtn" class="btn-secondary" disabled>点を編集</button>
-                <button id="clearBtn" class="btn-danger" disabled>クリア</button>
+
+        <canvas id="routeCanvas" width="1000" height="800"></canvas>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #27ae60;"></div>
+                <span>入口・出口</span>
             </div>
-            <div class="help-text">
-                クリックで点を追加、最初の点をクリックで完成
+            <div class="legend-item">
+                <div class="legend-color" style="background: #e74c3c; border: 3px dashed white;"></div>
+                <span>外周1周目</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #e67e22; border: 3px dashed white;"></div>
+                <span>外周2周目</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f39c12; border: 3px dashed white;"></div>
+                <span>外周3周目</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #3498db; border: 3px dashed white;"></div>
+                <span>内部往復</span>
             </div>
         </div>
 
-        <div class="section">
-            <div class="section-title">2. 入口・出口の設定</div>
-            <div class="button-group">
-                <button id="setEntryBtn" class="btn-primary" disabled>入口を設定</button>
-                <button id="setExitBtn" class="btn-primary" disabled>出口を設定</button>
-            </div>
-            <div class="info-box" id="pointInfo">
-                入口: 未設定<br>
-                出口: 未設定
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">3. トラクター設定</div>
-            <div class="input-group">
-                <label>機種名</label>
-                <input type="text" id="tractorModel" value="ヤンマー AF222">
-            </div>
-            <div class="input-group">
-                <label>作業幅 (cm)</label>
-                <input type="number" id="workWidth" value="110" min="50" max="300">
-            </div>
-            <div class="input-group">
-                <label>重複幅 (cm)</label>
-                <input type="number" id="overlapWidth" value="10" min="0" max="50">
-            </div>
-            <div class="input-group">
-                <label>外周の周回数</label>
-                <input type="number" id="perimeterRounds" value="3" min="1" max="10">
-            </div>
-            <div class="help-text">
-                AF222標準: 作業幅110cm、重複10cm推奨
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">4. ルート生成</div>
-            <button id="generateBtn" class="btn-success" disabled>ルートを生成</button>
-            <div class="info-box" id="routeInfo" style="margin-top: 12px; display: none;">
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">田んぼ情報</div>
-            <div class="info-box" id="areaInfo">
-                面積: 未計算
-            </div>
+        <div class="steps">
+            <h3>📋 作業手順</h3>
+            <div class="step"><strong>STEP 1:</strong> 左下の角から入場（緑のマーカー）</div>
+            <div class="step"><strong>STEP 2:</strong> 境界線に沿って外周1周目（赤線）を時計回りに耕す</div>
+            <div class="step"><strong>STEP 3:</strong> 内側に1mずらして外周2周目（オレンジ線）を耕す</div>
+            <div class="step"><strong>STEP 4:</strong> さらに内側に1mずらして外周3周目（黄色線）を耕す</div>
+            <div class="step"><strong>STEP 5:</strong> 残った内部を往復パターン（青線）で耕す</div>
+            <div class="step"><strong>STEP 6:</strong> 入口と同じ位置から退場</div>
+            <div class="step" style="margin-top: 15px; color: #e74c3c;"><strong>推定作業時間:</strong> 約40-50分</div>
         </div>
     </div>
 
-    <div id="map-container">
-        <canvas id="canvas"></canvas>
-        <div class="status" id="status">マウスで範囲を描画してください</div>
-        <div class="coordinates" id="coords">X: 0, Y: 0</div>
-    </div>
+    <script>
+        const canvas = document.getElementById('routeCanvas');
+        const ctx = canvas.getContext('2d');
 
-    <script src="app.js"></script>
+        // 田んぼの形状（画像から読み取った概略座標）
+        const fieldPoints = [
+            { x: 100, y: 100 },   // 左上
+            { x: 400, y: 80 },    // 上
+            { x: 850, y: 300 },   // 右上
+            { x: 880, y: 650 },   // 右下
+            { x: 600, y: 720 },   // 下
+            { x: 120, y: 600 },   // 左下
+        ];
+
+        // 入口・出口
+        const entry = { x: 120, y: 600 };
+
+        // 背景を描画
+        ctx.fillStyle = '#8B7355';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 田んぼの形状を塗りつぶし
+        ctx.fillStyle = '#D2B48C';
+        ctx.beginPath();
+        ctx.moveTo(fieldPoints[0].x, fieldPoints[0].y);
+        fieldPoints.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.closePath();
+        ctx.fill();
+
+        // ポリゴンをオフセット（簡易版）
+        function offsetPolygon(points, offset) {
+            const result = [];
+            for (let i = 0; i < points.length; i++) {
+                const p1 = points[i];
+                const p2 = points[(i + 1) % points.length];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const len = Math.hypot(dx, dy);
+                const nx = -dy / len;
+                const ny = dx / len;
+                result.push({
+                    x: p1.x + nx * offset,
+                    y: p1.y + ny * offset
+                });
+            }
+            return result;
+        }
+
+        // 外周を描画
+        function drawPerimeter(points, color, lineWidth, label) {
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = lineWidth + 4;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            points.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.stroke();
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            ctx.setLineDash([12, 8]);
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            points.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        // 外周1周目（赤）
+        drawPerimeter(fieldPoints, '#e74c3c', 5, '1周目');
+
+        // 外周2周目（オレンジ）
+        const perimeter2 = offsetPolygon(fieldPoints, -30);
+        drawPerimeter(perimeter2, '#e67e22', 5, '2周目');
+
+        // 外周3周目（黄）
+        const perimeter3 = offsetPolygon(fieldPoints, -60);
+        drawPerimeter(perimeter3, '#f39c12', 5, '3周目');
+
+        // 内部の往復パターン
+        const innerPolygon = offsetPolygon(fieldPoints, -90);
+        
+        // バウンディングボックスを取得
+        let minY = Infinity, maxY = -Infinity;
+        innerPolygon.forEach(p => {
+            minY = Math.min(minY, p.y);
+            maxY = Math.max(maxY, p.y);
+        });
+
+        // 往復パターンを描画
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 7;
+        ctx.setLineDash([]);
+        
+        let y = minY + 20;
+        let direction = 1;
+        let lastEnd = null;
+
+        while (y < maxY - 20) {
+            const intersections = [];
+            
+            for (let i = 0; i < innerPolygon.length; i++) {
+                const p1 = innerPolygon[i];
+                const p2 = innerPolygon[(i + 1) % innerPolygon.length];
+                
+                if ((p1.y <= y && p2.y > y) || (p2.y <= y && p1.y > y)) {
+                    const t = (y - p1.y) / (p2.y - p1.y);
+                    const x = p1.x + t * (p2.x - p1.x);
+                    intersections.push(x);
+                }
+            }
+            
+            intersections.sort((a, b) => a - b);
+            
+            if (intersections.length >= 2) {
+                const start = { x: intersections[0], y };
+                const end = { x: intersections[intersections.length - 1], y };
+                
+                if (lastEnd) {
+                    // 前の行との接続線
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.beginPath();
+                    ctx.moveTo(lastEnd.x, lastEnd.y);
+                    ctx.lineTo(direction === 1 ? start.x : end.x, y);
+                    ctx.stroke();
+                }
+                
+                // 往復線（白い縁取り）
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 7;
+                ctx.beginPath();
+                if (direction === 1) {
+                    ctx.moveTo(start.x, y);
+                    ctx.lineTo(end.x, y);
+                    lastEnd = end;
+                } else {
+                    ctx.moveTo(end.x, y);
+                    ctx.lineTo(start.x, y);
+                    lastEnd = start;
+                }
+                ctx.stroke();
+                
+                // 往復線（青い本体）
+                ctx.strokeStyle = '#3498db';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                if (direction === 1) {
+                    ctx.moveTo(start.x, y);
+                    ctx.lineTo(end.x, y);
+                } else {
+                    ctx.moveTo(end.x, y);
+                    ctx.lineTo(start.x, y);
+                }
+                ctx.stroke();
+            }
+            
+            y += 35;
+            direction *= -1;
+        }
+
+        // 田んぼの境界線
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(fieldPoints[0].x, fieldPoints[0].y);
+        fieldPoints.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.closePath();
+        ctx.stroke();
+
+        // 各頂点を描画
+        fieldPoints.forEach(p => {
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.fillStyle = '#3498db';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // 入口・出口マーカー
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(entry.x, entry.y, 20, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath();
+        ctx.arc(entry.x, entry.y, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('入口', entry.x, entry.y - 2);
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('出口', entry.x, entry.y + 12);
+
+        // 方向の矢印を追加
+        function drawArrow(x, y, angle, label) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            
+            // 矢印の影
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.beginPath();
+            ctx.moveTo(12, 0);
+            ctx.lineTo(-8, -8);
+            ctx.lineTo(-8, 8);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 矢印本体
+            ctx.fillStyle = '#27ae60';
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(-10, -10);
+            ctx.lineTo(-10, 10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
+            ctx.restore();
+            
+            // ラベル
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.strokeText(label, x, y - 25);
+            ctx.fillText(label, x, y - 25);
+        }
+
+        // 外周の進行方向矢印
+        drawArrow(250, 90, 0, '開始');
+        drawArrow(700, 200, Math.PI / 3, '→');
+        drawArrow(850, 500, Math.PI / 2, '→');
+    </script>
 </body>
 </html>
