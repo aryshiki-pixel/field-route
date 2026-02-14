@@ -1,73 +1,633 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>圃場耕運ルート生成（安定版）</title>
-<style>
-body { font-family: sans-serif; }
-canvas { border:1px solid #333; margin-top:10px; }
-button { margin-right:5px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>田んぼ耕運ルートプランナー</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: white;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #34495e;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #2980b9;
+        }
+
+        .btn-primary.active {
+            background: #27ae60;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #7f8c8d;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #229954;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #c0392b;
+        }
+
+        .input-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: #555;
+        }
+
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        input[type="number"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .info-box {
+            background: #ecf0f1;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        .info-box strong {
+            color: #2c3e50;
+        }
+
+        #map-container {
+            flex: 1;
+            position: relative;
+            background: #e8f4f8;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+            background: white;
+        }
+
+        .status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 16px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            font-size: 13px;
+            color: #555;
+        }
+
+        .coordinates {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+    </style>
 </head>
 <body>
+    <div class="sidebar">
+        <h1>🚜 田んぼ耕運ルートプランナー</h1>
+        
+        <div class="section">
+            <div class="section-title">1. 田んぼの範囲設定</div>
+            <div class="button-group">
+                <button id="drawBtn" class="btn-primary">範囲を描画</button>
+                <button id="editBtn" class="btn-secondary" disabled>点を編集</button>
+                <button id="clearBtn" class="btn-danger" disabled>クリア</button>
+            </div>
+            <div class="help-text">
+                クリックで点を追加、最初の点をクリックで完成
+            </div>
+        </div>
 
-<h3>圃場耕運ルート生成（枕地3行後回し）</h3>
+        <div class="section">
+            <div class="section-title">2. 入口・出口の設定</div>
+            <div class="button-group">
+                <button id="setEntryBtn" class="btn-primary" disabled>入口を設定</button>
+                <button id="setExitBtn" class="btn-primary" disabled>出口を設定</button>
+            </div>
+            <div class="info-box" id="pointInfo">
+                入口: 未設定<br>
+                出口: 未設定
+            </div>
+        </div>
 
-<input type="file" id="imgInput"><br><br>
+        <div class="section">
+            <div class="section-title">3. トラクター設定</div>
+            <div class="input-group">
+                <label>機種名</label>
+                <input type="text" id="tractorModel" value="ヤンマー AF222">
+            </div>
+            <div class="input-group">
+                <label>作業幅 (cm)</label>
+                <input type="number" id="workWidth" value="110" min="50" max="300">
+            </div>
+            <div class="input-group">
+                <label>重複幅 (cm)</label>
+                <input type="number" id="overlapWidth" value="10" min="0" max="50">
+            </div>
+            <div class="input-group">
+                <label>外周の周回数</label>
+                <input type="number" id="perimeterRounds" value="3" min="1" max="10">
+            </div>
+            <div class="help-text">
+                AF222標準: 作業幅110cm、重複10cm推奨
+            </div>
+        </div>
 
-作業幅（px換算）:
-<input type="number" id="width" value="20"><br><br>
+        <div class="section">
+            <div class="section-title">4. ルート生成</div>
+            <button id="generateBtn" class="btn-success" disabled>ルートを生成</button>
+            <div class="info-box" id="routeInfo" style="margin-top: 12px; display: none;">
+                <!-- ルート情報がここに表示されます -->
+            </div>
+        </div>
 
-<button id="modeField">圃場指定</button>
-<button id="modeIn">入口</button>
-<button id="modeOut">出口</button>
-<button id="closeField">圃場を閉じる</button>
-<button id="gen">ルート生成</button>
+        <div class="section">
+            <div class="section-title">田んぼ情報</div>
+            <div class="info-box" id="areaInfo">
+                面積: 未計算
+            </div>
+        </div>
+    </div>
 
-<canvas id="cv"></canvas>
+    <div id="map-container">
+        <canvas id="canvas"></canvas>
+        <div class="status" id="status">マウスで範囲を描画してください</div>
+        <div class="coordinates" id="coords">X: 0, Y: 0</div>
+    </div>
 
-<script>
-const canvas = document.getElementById("cv");
-const ctx = canvas.getContext("2d");
+    <script>
+        // キャンバス設定
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            const container = document.getElementById('map-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            draw();
+        }
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
 
-let img;
-let field = [];
-let entry = null;
-let exit = null;
-let mode = "field";
+        // 状態管理
+        let mode = 'none'; // none, drawing, editing, setEntry, setExit
+        let fieldPoints = [];
+        let tempPoint = null;
+        let selectedPointIndex = -1;
+        let entryPoint = null;
+        let exitPoint = null;
+        let route = [];
 
-document.getElementById("modeField").onclick = () => mode="field";
-document.getElementById("modeIn").onclick = () => mode="in";
-document.getElementById("modeOut").onclick = () => mode="out";
+        // 比例尺: 1ピクセル = 10cm（実際のアプリではGPS座標を使用）
+        const PIXEL_TO_CM = 10;
 
-document.getElementById("imgInput").onchange = e => {
-  img = new Image();
-  img.onload = () => {
-    canvas.width = img.width;
-    canvas.height = img.height;
-    redraw();
-  };
-  img.src = URL.createObjectURL(e.target.files[0]);
-};
+        // UI要素
+        const drawBtn = document.getElementById('drawBtn');
+        const editBtn = document.getElementById('editBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const setEntryBtn = document.getElementById('setEntryBtn');
+        const setExitBtn = document.getElementById('setExitBtn');
+        const generateBtn = document.getElementById('generateBtn');
+        const status = document.getElementById('status');
+        const coords = document.getElementById('coords');
+        const areaInfo = document.getElementById('areaInfo');
+        const pointInfo = document.getElementById('pointInfo');
+        const routeInfo = document.getElementById('routeInfo');
 
-function redraw() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  if (img) ctx.drawImage(img,0,0);
+        // ボタンイベント
+        drawBtn.addEventListener('click', () => {
+            mode = 'drawing';
+            fieldPoints = [];
+            tempPoint = null;
+            entryPoint = null;
+            exitPoint = null;
+            route = [];
+            updateUI();
+            status.textContent = 'クリックで点を追加（最初の点をクリックで完成）';
+        });
 
-  // 圃場
-  if (field.length > 0) {
-    ctx.strokeStyle="white";
-    ctx.beginPath();
-    field.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
-    if (field.length > 2) ctx.closePath();
-    ctx.stroke();
-  }
+        editBtn.addEventListener('click', () => {
+            mode = 'editing';
+            updateUI();
+            status.textContent = '点をドラッグして移動';
+        });
 
-  // 入口出口
-  if (entry) drawPoint(entry,"blue");
-  if (exit) drawPoint(exit,"purple");
-}
+        clearBtn.addEventListener('click', () => {
+            if (confirm('全てクリアしますか？')) {
+                fieldPoints = [];
+                tempPoint = null;
+                entryPoint = null;
+                exitPoint = null;
+                route = [];
+                mode = 'none';
+                updateUI();
+                status.textContent = 'クリアしました';
+            }
+        });
 
+        setEntryBtn.addEventListener('click', () => {
+            mode = 'setEntry';
+            updateUI();
+            status.textContent = '田んぼの境界線上で入口をクリック';
+        });
+
+        setExitBtn.addEventListener('click', () => {
+            mode = 'setExit';
+            updateUI();
+            status.textContent = '田んぼの境界線上で出口をクリック';
+        });
+
+        generateBtn.addEventListener('click', generateRoute);
+
+        // マウスイベント
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            coords.textContent = `X: ${Math.round(x)}, Y: ${Math.round(y)}`;
+
+            if (mode === 'drawing' && fieldPoints.length > 0) {
+                tempPoint = { x, y };
+                draw();
+            } else if (mode === 'editing' && selectedPointIndex >= 0) {
+                fieldPoints[selectedPointIndex] = { x, y };
+                draw();
+                calculateArea();
+            }
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (mode === 'drawing') {
+                // 最初の点の近くをクリックしたら完成
+                if (fieldPoints.length >= 3) {
+                    const firstPoint = fieldPoints[0];
+                    const dist = Math.hypot(x - firstPoint.x, y - firstPoint.y);
+                    if (dist < 15) {
+                        mode = 'none';
+                        calculateArea();
+                        updateUI();
+                        status.textContent = '範囲の設定が完了しました';
+                        return;
+                    }
+                }
+                fieldPoints.push({ x, y });
+                draw();
+            } else if (mode === 'editing') {
+                // 最も近い点を選択
+                let minDist = Infinity;
+                let minIndex = -1;
+                fieldPoints.forEach((p, i) => {
+                    const dist = Math.hypot(x - p.x, y - p.y);
+                    if (dist < minDist && dist < 15) {
+                        minDist = dist;
+                        minIndex = i;
+                    }
+                });
+                selectedPointIndex = minIndex;
+            } else if (mode === 'setEntry') {
+                entryPoint = findNearestPointOnBoundary(x, y);
+                mode = 'none';
+                updateUI();
+                updatePointInfo();
+                status.textContent = '入口を設定しました';
+            } else if (mode === 'setExit') {
+                exitPoint = findNearestPointOnBoundary(x, y);
+                mode = 'none';
+                updateUI();
+                updatePointInfo();
+                status.textContent = '出口を設定しました';
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (mode === 'editing') {
+                selectedPointIndex = -1;
+                calculateArea();
+            }
+        });
+
+        // 境界線上の最も近い点を見つける
+        function findNearestPointOnBoundary(x, y) {
+            let minDist = Infinity;
+            let nearestPoint = null;
+
+            for (let i = 0; i < fieldPoints.length; i++) {
+                const p1 = fieldPoints[i];
+                const p2 = fieldPoints[(i + 1) % fieldPoints.length];
+                
+                const point = nearestPointOnSegment(x, y, p1, p2);
+                const dist = Math.hypot(x - point.x, y - point.y);
+                
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearestPoint = point;
+                }
+            }
+
+            return nearestPoint;
+        }
+
+        // 線分上の最も近い点
+        function nearestPointOnSegment(px, py, p1, p2) {
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const t = Math.max(0, Math.min(1, ((px - p1.x) * dx + (py - p1.y) * dy) / (dx * dx + dy * dy)));
+            return {
+                x: p1.x + t * dx,
+                y: p1.y + t * dy
+            };
+        }
+
+        // 面積計算（Shoelace formula）
+        function calculateArea() {
+            if (fieldPoints.length < 3) {
+                areaInfo.innerHTML = '面積: 未計算';
+                return;
+            }
+
+            let area = 0;
+            for (let i = 0; i < fieldPoints.length; i++) {
+                const j = (i + 1) % fieldPoints.length;
+                area += fieldPoints[i].x * fieldPoints[j].y;
+                area -= fieldPoints[j].x * fieldPoints[i].y;
+            }
+            area = Math.abs(area / 2);
+
+            // ピクセルから平方メートルへ変換
+            const areaCm2 = area * PIXEL_TO_CM * PIXEL_TO_CM;
+            const areaM2 = areaCm2 / 10000;
+            const areaTsubo = areaM2 / 3.30579; // 1坪 = 3.30579m²
+
+            areaInfo.innerHTML = `
+                <strong>面積:</strong><br>
+                ${areaM2.toFixed(1)} m² (${areaTsubo.toFixed(1)} 坪)
+            `;
+        }
+
+        // ポイント情報更新
+        function updatePointInfo() {
+            const entryText = entryPoint ? '設定済み ✓' : '未設定';
+            const exitText = exitPoint ? '設定済み ✓' : '未設定';
+            pointInfo.innerHTML = `入口: ${entryText}<br>出口: ${exitText}`;
+        }
+
+        // UI状態更新
+        function updateUI() {
+            const hasField = fieldPoints.length >= 3 && mode !== 'drawing';
+            
+            drawBtn.classList.toggle('active', mode === 'drawing');
+            editBtn.disabled = !hasField;
+            editBtn.classList.toggle('active', mode === 'editing');
+            clearBtn.disabled = fieldPoints.length === 0;
+            
+            setEntryBtn.disabled = !hasField;
+            setEntryBtn.classList.toggle('active', mode === 'setEntry');
+            setExitBtn.disabled = !hasField;
+            setExitBtn.classList.toggle('active', mode === 'setExit');
+            
+            generateBtn.disabled = !(hasField && entryPoint && exitPoint);
+
+            draw();
+        }
+
+        // ルート生成
+        function generateRoute() {
+            const workWidth = parseInt(document.getElementById('workWidth').value);
+            const overlapWidth = parseInt(document.getElementById('overlapWidth').value);
+            const perimeterRounds = parseInt(document.getElementById('perimeterRounds').value);
+
+            const effectiveWidth = (workWidth - overlapWidth) / PIXEL_TO_CM;
+
+            route = [];
+
+            // 1. 外周を指定回数分トレース
+            for (let i = 0; i < perimeterRounds; i++) {
+                const offset = i * effectiveWidth;
+                const perimeterPath = createOffsetPolygon(fieldPoints, -offset);
+                if (perimeterPath.length > 0) {
+                    route.push(...perimeterPath);
+                }
+            }
+
+            // 2. 内部を往復で耕す
+            const innerPolygon = createOffsetPolygon(fieldPoints, -(perimeterRounds * effectiveWidth));
+            if (innerPolygon.length > 0) {
+                const bounds = getBounds(innerPolygon);
+                const innerRoute = createBackAndForthPattern(innerPolygon, bounds, effectiveWidth);
+                route.push(...innerRoute);
+            }
+
+            // ルート情報表示
+            const totalDistance = calculateRouteDistance(route);
+            const distanceM = (totalDistance * PIXEL_TO_CM) / 100;
+            
+            routeInfo.style.display = 'block';
+            routeInfo.innerHTML = `
+                <strong>ルート生成完了</strong><br>
+                総移動距離: ${distanceM.toFixed(1)} m<br>
+                外周周回: ${perimeterRounds}回<br>
+                ルートポイント数: ${route.length}
+            `;
+
+            status.textContent = 'ルートが生成されました';
+            draw();
+        }
+
+        // ポリゴンの内側/外側にオフセット
+        function createOffsetPolygon(points, offset) {
+            // 簡易実装：各辺を内側/外側に平行移動
+            if (points.length < 3) return [];
+            
+            const result = [];
+            for (let i = 0; i < points.length; i++) {
+                const p1 = points[i];
+                const p2 = points[(i + 1) % points.length];
+                const p0 = points[(i - 1 + points.length) % points.length];
+                
+                // 辺の法線ベクトル
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const len = Math.hypot(dx, dy);
+                const nx = -dy / len;
+                const ny = dx / len;
+                
+                result.push({
+                    x: p1.x + nx * offset,
+                    y: p1.y + ny * offset
+                });
+            }
+            
+            return result;
+        }
+
+        // バウンディングボックス
+        function getBounds(points) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            points.forEach(p => {
+                minX = Math.min(minX, p.x);
+                minY = Math.min(minY, p.y);
+                maxX = Math.max(maxX, p.x);
+                maxY = Math.max(maxY, p.y);
+            });
+            return { minX, minY, maxX, maxY };
+        }
+
+        // 往復パターン生成
+        function createBackAndForthPattern(polygon, bounds, width) {
+            const pattern = [];
+            let y = bounds.minY;
+            let direction = 1;
+
+            while (y <= bounds.maxY) {
+                const intersections = [];
+                
+                // Y座標での交点を見つける
+                for (let i = 0; i < polygon.length; i++) {
+                    const p1 = polygon[i];
+                    const p2 = polygon[(i + 1) % polygon.length];
+                    
+                    if ((p1.y <= y && p2.y > y) || (p2.y <= y && p1.y > y)) {
+                        const t = (y - p1.y) / (p2.y - p1.y);
+                        const x = p1.x + t * (p2.x - p1.x);
+                        intersections.push(x);
+                    }
+                }
+                
+                intersections.sort((a, b) => a - b);
+                
+                // 交点をペアにして往復
+                for (let i = 0; i < intersections.length; i += 2) {
+                    if (i + 1 < intersections.length) {
+                        if (direction === 1) {
+                            pattern.push({ x: intersections[i], y });
+                            pattern.push({ x: intersections[i + 1], y });
+                        } else {
+                            pattern.push({ x: intersections[i + 1], y });
+                            pattern.push({ x: intersections[i], y });
+                        }
+                    }
+                }
+                
+                y += width;
+                direction *= -1;
+            }
+
+         
 function drawPoint(p,color){
   ctx.fillStyle=color;
   ctx.beginPath();
