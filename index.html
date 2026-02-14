@@ -25,6 +25,7 @@
             padding: 20px;
             overflow-y: auto;
             box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
         }
 
         h1 {
@@ -95,6 +96,584 @@
 
         .btn-success {
             background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #229954;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #c0392b;
+        }
+
+        .input-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: #555;
+        }
+
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        input[type="number"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-upload-label {
+            display: block;
+            padding: 10px 16px;
+            background: #3498db;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .file-upload-label:hover {
+            background: #2980b9;
+        }
+
+        .image-preview {
+            margin-top: 10px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 2px solid #ddd;
+        }
+
+        .image-preview img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .image-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .image-controls button {
+            flex: 1;
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+
+        .info-box {
+            background: #ecf0f1;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        .info-box strong {
+            color: #2c3e50;
+        }
+
+        #map-container {
+            flex: 1;
+            position: relative;
+            background: #e8f4f8;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+            background: white;
+        }
+
+        .status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 16px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            font-size: 13px;
+            color: #555;
+            max-width: calc(100% - 20px);
+        }
+
+        .coordinates {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+        }
+
+        .menu-toggle span {
+            display: block;
+            width: 24px;
+            height: 3px;
+            background: #2c3e50;
+            margin: 5px 0;
+            transition: 0.3s;
+        }
+
+        /* スマホ対応 */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                max-width: 320px;
+                height: 100vh;
+                z-index: 999;
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            #map-container {
+                width: 100%;
+                height: 100vh;
+            }
+
+            .status {
+                top: 60px;
+                font-size: 12px;
+                padding: 8px 12px;
+            }
+
+            .coordinates {
+                display: none;
+            }
+
+            h1 {
+                font-size: 18px;
+                margin-bottom: 15px;
+            }
+
+            .section {
+                margin-bottom: 20px;
+                padding-bottom: 15px;
+            }
+
+            button {
+                padding: 12px 16px;
+                font-size: 15px;
+            }
+
+            .file-upload-label {
+                padding: 12px 16px;
+                font-size: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .sidebar {
+                max-width: 100%;
+            }
+
+            .status {
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="menu-toggle" id="menuToggle">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <div class="sidebar" id="sidebar">
+        <h1>🚜 田んぼ耕運ルートプランナー</h1>
+        
+        <div class="section">
+            <div class="section-title">0. 航空写真をアップロード</div>
+            <input type="file" id="imageUpload" accept="image/*">
+            <label for="imageUpload" class="file-upload-label">
+                📷 写真を選択
+            </label>
+            <div id="imagePreview" class="image-preview" style="display: none;">
+                <img id="previewImg" src="" alt="プレビュー">
+            </div>
+            <div class="image-controls" id="imageControls" style="display: none;">
+                <button id="fitImageBtn" class="btn-secondary">画像を合わせる</button>
+                <button id="removeImageBtn" class="btn-danger">削除</button>
+            </div>
+            <div class="help-text">
+                Google MapやドローンなどでキャプチャしたJPG/PNG画像
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">1. 田んぼの範囲設定</div>
+            <div class="button-group">
+                <button id="drawBtn" class="btn-primary">範囲を描画</button>
+                <button id="editBtn" class="btn-secondary" disabled>点を編集</button>
+                <button id="clearBtn" class="btn-danger" disabled>クリア</button>
+            </div>
+            <div class="help-text">
+                クリックで点を追加、最初の点をクリックで完成
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">2. 入口・出口の設定</div>
+            <div class="button-group">
+                <button id="setEntryBtn" class="btn-primary" disabled>入口を設定</button>
+                <button id="setExitBtn" class="btn-primary" disabled>出口を設定</button>
+            </div>
+            <div class="info-box" id="pointInfo">
+                入口: 未設定<br>
+                出口: 未設定
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">3. トラクター設定</div>
+            <div class="input-group">
+                <label>機種名</label>
+                <input type="text" id="tractorModel" value="ヤンマー AF222">
+            </div>
+            <div class="input-group">
+                <label>作業幅 (cm)</label>
+                <input type="number" id="workWidth" value="110" min="50" max="300">
+            </div>
+            <div class="input-group">
+                <label>重複幅 (cm)</label>
+                <input type="number" id="overlapWidth" value="10" min="0" max="50">
+            </div>
+            <div class="input-group">
+                <label>外周の周回数</label>
+                <input type="number" id="perimeterRounds" value="3" min="1" max="10">
+            </div>
+            <div class="help-text">
+                AF222標準: 作業幅110cm、重複10cm推奨
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">4. ルート生成</div>
+            <button id="generateBtn" class="btn-success" disabled>ルートを生成</button>
+            <div class="info-box" id="routeInfo" style="margin-top: 12px; display: none;">
+                <!-- ルート情報がここに表示されます -->
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">田んぼ情報</div>
+            <div class="info-box" id="areaInfo">
+                面積: 未計算
+            </div>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <canvas id="canvas"></canvas>
+        <div class="status" id="status">マウスで範囲を描画してください</div>
+        <div class="coordinates" id="coords">X: 0, Y: 0</div>
+    </div>
+
+    <script>
+        // メニュートグル（スマホ用）
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        
+        menuToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+        });
+
+        // サイドバー外をクリックしたら閉じる（スマホ）
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768) {
+                if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                }
+            }
+        });
+
+        // キャンバス設定
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 航空写真用の変数
+        let backgroundImage = null;
+        let imageScale = 1;
+        let imageOffsetX = 0;
+        let imageOffsetY = 0;
+        
+        function resizeCanvas() {
+            const container = document.getElementById('map-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            draw();
+        }
+        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 航空写真アップロード
+        const imageUpload = document.getElementById('imageUpload');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImg = document.getElementById('previewImg');
+        const imageControls = document.getElementById('imageControls');
+        const fitImageBtn = document.getElementById('fitImageBtn');
+        const removeImageBtn = document.getElementById('removeImageBtn');
+
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        backgroundImage = img;
+                        previewImg.src = event.target.result;
+                        imagePreview.style.display = 'block';
+                        imageControls.style.display = 'flex';
+                        fitImageToCanvas();
+                        draw();
+                        status.textContent = '航空写真を読み込みました';
+                        // スマホの場合はメニューを閉じる
+                        if (window.innerWidth <= 768) {
+                            sidebar.classList.remove('open');
+                        }
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        fitImageBtn.addEventListener('click', () => {
+            fitImageToCanvas();
+            draw();
+        });
+
+        removeImageBtn.addEventListener('click', () => {
+            if (confirm('航空写真を削除しますか？')) {
+                backgroundImage = null;
+                imagePreview.style.display = 'none';
+                imageControls.style.display = 'none';
+                imageUpload.value = '';
+                draw();
+                status.textContent = '航空写真を削除しました';
+            }
+        });
+
+        function fitImageToCanvas() {
+            if (!backgroundImage) return;
+            
+            const canvasAspect = canvas.width / canvas.height;
+            const imageAspect = backgroundImage.width / backgroundImage.height;
+            
+            if (canvasAspect > imageAspect) {
+                // キャンバスの方が横長
+                imageScale = canvas.height / backgroundImage.height;
+                imageOffsetX = (canvas.width - backgroundImage.width * imageScale) / 2;
+                imageOffsetY = 0;
+            } else {
+                // 画像の方が横長
+                imageScale = canvas.width / backgroundImage.width;
+                imageOffsetX = 0;
+                imageOffsetY = (canvas.height - backgroundImage.height * imageScale) / 2;
+            }
+        }
+
+        // 状態管理
+        let mode = 'none'; // none, drawing, editing, setEntry, setExit
+        let fieldPoints = [];
+        let tempPoint = null;
+        let selectedPointIndex = -1;
+        let entryPoint = null;
+        let exitPoint = null;
+        let route = [];
+
+        // 比例尺: 1ピクセル = 10cm（実際のアプリではGPS座標を使用）
+        const PIXEL_TO_CM = 10;
+
+        // UI要素
+        const drawBtn = document.getElementById('drawBtn');
+        const editBtn = document.getElementById('editBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const setEntryBtn = document.getElementById('setEntryBtn');
+        const setExitBtn = document.getElementById('setExitBtn');
+        const generateBtn = document.getElementById('generateBtn');
+        const status = document.getElementById('status');
+        const coords = document.getElementById('coords');
+        const areaInfo = document.getElementById('areaInfo');
+        const pointInfo = document.getElementById('pointInfo');
+        const routeInfo = document.getElementById('routeInfo');
+
+        // ボタンイベント
+        drawBtn.addEventListener('click', () => {
+            mode = 'drawing';
+            fieldPoints = [];
+            tempPoint = null;
+            entryPoint = null;
+            exitPoint = null;
+            route = [];
+            updateUI();
+            status.textContent = 'クリックで点を追加（最初の点をクリックで完成）';
+        });
+
+        editBtn.addEventListener('click', () => {
+            mode = 'editing';
+            updateUI();
+            status.textContent = '点をドラッグして移動';
+        });
+
+        clearBtn.addEventListener('click', () => {
+            if (confirm('全てクリアしますか？')) {
+                fieldPoints = [];
+                tempPoint = null;
+                entryPoint = null;
+                exitPoint = null;
+                route = [];
+                mode = 'none';
+                updateUI();
+                status.textContent = 'クリアしました';
+            }
+        });
+
+        setEntryBtn.addEventListener('click', () => {
+            mode = 'setEntry';
+            updateUI();
+            status.textContent = '田んぼの境界線上で入口をクリック';
+        });
+
+        setExitBtn.addEventListener('click', () => {
+            mode = 'setExit';
+            updateUI();
+            status.textContent = '田んぼの境界線上で出口をクリック';
+        });
+
+        generateBtn.addEventListener('click', generateRoute);
+
+        // マウスイベント
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            coords.textContent = `X: ${Math.round(x)}, Y: ${Math.round(y)}`;
+
+            if (mode === 'drawing' && fieldPoints.length > 0) {
+                tempPoint = { x, y };
+                draw();
+            } else if (mode === 'editing' && selectedPointIndex >= 0) {
+                fieldPoints[selectedPointIndex] = { x, y };
+                draw();
+                calculateArea();
+            }
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (mode === 'drawing') {
+                // 最初の点の近くをクリックしたら完成
+                if (fieldPoints.length >= 3) {
+                    const firstPoint = fieldPoints[0];
+                    const dist = Math.hypot(x - firstPoint.x, y - firstPoint.y);
+                    if (dist < 15) {
+                        mode = 'none';
+                        calculateArea();
+                        updateUI();
+                        status.textContent = '範囲の設定が完了しました';
+                        return;
+                    }
+                }
+                fieldPoints.push({ x, y });
+                draw();
+            } else if (mode === 'editing') {
+                // 最も近い点を選択
+                let minDist = Infinity;
+                let minIndex = -1;
+                fieldPoints.forEach((p, i) => {
+                    const dist = Math.hypot(x - p.x, y - p.y);
+                    if (dist < minDist && dist < 15) {
+                        minDist = dist;
+                        minIndex = i;
+                    }
+                });
+                selectedPointIndex = minIndex;
+            } else if (mode === 'setEntry') {
+                entryPoint = findNearestPointOnBoundary(x, y);
+                mode = 'none';
+                updateUI();
+                updatePointInfo();
+                status.textContent = '入口を設定しました';
+            } else if (mode === 'setExit') {
+                exitPoint = findNearestPointOnBoundary(x, y);
+                mode = 'none';
+                updateUI();
+                updatePointInfo();
+                status.textContent = '出口を設定しました';
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+                       background: #27ae60;
             color: white;
         }
 
